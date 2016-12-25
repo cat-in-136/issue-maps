@@ -1,4 +1,5 @@
 gulp = require "gulp"
+bower = require "gulp-bower"
 $ = require("gulp-load-plugins")()
 del = require "del"
 fs = require "fs"
@@ -8,6 +9,9 @@ packageJson = require "./package.json"
 #watchify = require "watchify"
 watchify = require "gulp-watchify"
 source = require "vinyl-source-stream"
+
+gulp.task "bower:install", ->
+  bower()
 
 gulp.task "build", [
   "build:browserify"
@@ -26,7 +30,11 @@ gulp.task "build:coffee", ->
   .pipe $.coffee()
   .pipe gulp.dest("lib")
 
-gulp.task "build:ts", ->
+gulp.task "build:typings", ->
+  gulp.src "./typings.json"
+  .pipe $.typings()
+
+gulp.task "build:ts", ["build:typings"], ->
   gulp.src "src/js/**/*.ts"
   .pipe $.typescript
     target:"es6"
@@ -50,14 +58,14 @@ gulp.task "build:browserify", ["build:pre"], watchify (watchify)->
 
 gulp.task "build:slim", ->
   gulp.src "src/html/**/*.slim"
-  .pipe $.slim()
+  .pipe $.slim({bundler: true})
   .pipe gulp.dest("public")
 
 gulp.task "build:sass", ->
-  $.rubySass("src/css/**/*.sass")
+  $.rubySass("src/css/**/*.sass", {bundleExec: true})
   .pipe gulp.dest("public/css")
 
-gulp.task "build:bower", ->
+gulp.task "build:bower", ["bower:install"], ->
   gulp.src "bower_components/**/*"
   .pipe gulp.dest "public/bower_components"
 
@@ -96,11 +104,27 @@ gulp.task "watch", ["build", "enable-watch-mode", "connect"], ->
   gulp.watch "./src/html/**/*.slim",    ["build:slim"]
   gulp.watch "./src/css/**/*.sass",    ["build:sass"]
 
+gulp.task "serve", ["build", "enable-watch-mode"], ->
+  console.log $.connect
+  $.connect.server
+    root: "public"
+    host: "127.0.0.1"
+
+gulp.task "test", [
+  "build"
+  # TODO test
+]
+
 gulp.task "default", ["build"]
 
-gulp.task "clean", del.bind(null, ["lib/*", "public/*"])
+gulp.task "clean", del.bind(null, ["lib/*", "public/*", "public.zip"])
 
 gulp.task "s3", ["build"], ->
   aws = JSON.parse fs.readFileSync("aws.json")
   gulp.src "public/**"
   .pipe $.s3(aws)
+
+gulp.task "zip", ["build"], ->
+  gulp.src "public/**"
+  .pipe $.zip "public.zip"
+  .pipe gulp.dest "./"
